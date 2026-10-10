@@ -35,6 +35,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; height: 100%; }
+/* Waiting for the account's mood on a new device: plain paper, nothing shown yet. */
+html.booting body { background: #FAF6EE !important; }
+html.booting #app, html.booting #auth { visibility: hidden; }
 [hidden] { display: none !important; }
 
 body {

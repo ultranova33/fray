@@ -2,7 +2,7 @@
 // Fray service worker: phone push alerts + offline app shell
 // ==========================================================================
 
-const CACHE = 'fray-v3';
+const CACHE = 'fray-v4';
 const SHELL = [
   './',
   './index.html',

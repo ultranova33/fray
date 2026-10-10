@@ -26,6 +26,7 @@ const EMAIL_DOMAIN = 'fray.app';
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const NOTIFIED_KEY = 'fray.notified';
 const PIN_KEY = 'fray.moodPin';
+const SHUFFLE = 'shuffle';
 const ALERTS_ASKED_KEY = 'fray.alertsAsked';
 const LAST_MINUTE_MS = 60 * 1000;
 const STALE_ALERT_MS = 10 * 60 * 1000;
@@ -97,9 +98,17 @@ let renderCache = new Map();
 init();
 
 async function init() {
-  state.mood = dealMood(readStorage(PIN_KEY));
+  // PIN_KEY holds this device's copy of the account's mood setting: a mood id,
+  // 'shuffle', or nothing yet (new device, or the installed app on iPhone,
+  // which has its own storage). With nothing yet, the screen waits for the
+  // profile instead of flashing a random mood first.
+  const pinPref = readStorage(PIN_KEY);
+  state.mood = dealMood(pinPref && pinPref !== SHUFFLE ? pinPref : null);
   applyMood(state.mood);
-  playWipe();
+  if (pinPref === null) {
+    document.documentElement.classList.add('booting');
+    setTimeout(endBooting, 3000); // never hold the screen on a slow network
+  } else playWipe();
   bindUi();
   state.swReady = registerServiceWorker();
   showQuote(state.shuffler.current(), false);
@@ -212,7 +221,7 @@ function deal(container) {
 
 async function setMoodPin(pin) {
   const value = pin ? state.mood.id : null;
-  if (pin) writeStorage(PIN_KEY, value); else removeStorage(PIN_KEY);
+  writeStorage(PIN_KEY, value || SHUFFLE);
   await saveProfile({ mood_pin: value });
   toast(pin ? `${state.mood.name} is pinned until you switch back to Shuffle.` : 'Shuffle is on. A new mood every launch.');
 }
@@ -221,7 +230,14 @@ async function setMoodPin(pin) {
 // Auth
 // ==========================================================================
 
+function endBooting() {
+  if (!document.documentElement.classList.contains('booting')) return;
+  document.documentElement.classList.remove('booting');
+  playWipe();
+}
+
 function showAuth() {
+  endBooting();
   stopRealtime();
   state.user = null;
   state.profile = null;
@@ -309,6 +325,7 @@ async function signOut() {
   const sub = await currentPushSubscription();
   if (sub && sb) await sb.rpc('delete_push_subscription', { p_endpoint: sub.endpoint }).then(() => {}, () => {});
   await sb.auth.signOut();
+  removeStorage(PIN_KEY); // the next account brings its own mood setting
   showAuth();
 }
 
@@ -333,7 +350,8 @@ async function startApp(user, opts = {}) {
     const pinned = moodById(state.profile.mood_pin);
     if (pinned) { state.mood = pinned; applyMood(pinned); }
   }
-  if (state.profile.mood_pin) writeStorage(PIN_KEY, state.profile.mood_pin); else removeStorage(PIN_KEY);
+  writeStorage(PIN_KEY, state.profile.mood_pin || SHUFFLE);
+  endBooting();
 
   const name = state.profile.username || 'you';
   el.avatarBtn.textContent = name.charAt(0);
