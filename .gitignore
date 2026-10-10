@@ -1,0 +1,6 @@
+push-keys.txt
+supabase/push-schedule.sql
+.vercel/
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Fray</title>
+  <meta name="description" content="Fray: your day, dealt fresh. A playful daily task app with timers, a 3-day history and a nightly nudge." />
+
+  <!-- PWA / home screen -->
+  <meta name="theme-color" content="#EFE9E9" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Fray" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="preload" href="plasebo-studio-alaca-black.otf" as="font" type="font/otf" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Supabase JS v2 (exposes window.supabase) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div class="wipe" id="wipe" aria-hidden="true"></div>
+
+  <!-- ================= Sign in / create account ================= -->
+  <section class="auth" id="auth" hidden aria-labelledby="auth-title">
+    <div class="auth-card chunky">
+      <p class="eyebrow" id="auth-mood">today's mood</p>
+      <h1 class="auth-logo" id="auth-title">Fray<span>.</span></h1>
+      <p class="auth-tag">your day, <em>dealt fresh.</em></p>
+
+      <div class="seg seg--wide" role="tablist" aria-label="Account">
+        <button type="button" role="tab" class="seg-btn is-on" data-auth-mode="signin" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" class="seg-btn" data-auth-mode="signup" aria-selected="false">Create account</button>
+      </div>
+
+      <form id="auth-form" class="auth-form" autocomplete="on" novalidate>
+        <label class="field">
+          <span class="label">Username</span>
+          <input id="auth-username" class="input" type="text" name="username" autocomplete="username"
+                 autocapitalize="none" spellcheck="false" maxlength="20" placeholder="lowercase, 3–20 letters" required />
+        </label>
+        <label class="field">
+          <span class="label">Password</span>
+          <input id="auth-password" class="input" type="password" name="password" autocomplete="current-password"
+                 minlength="6" maxlength="72" placeholder="at least 6 characters" required />
+        </label>
+        <p class="form-error" id="auth-error" role="alert"></p>
+        <button type="submit" class="btn btn--primary btn--block" id="auth-submit">Sign in</button>
+        <p class="auth-note" id="auth-note">Your tasks are private to your account.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= App ================= -->
+  <div class="app" id="app" hidden>
+    <header class="top">
+      <h1 class="greet" id="greeting">Morning,<br /><em>you.</em></h1>
+      <p class="date"><b id="date-day">Sat</b><span id="date-rest">Oct 10</span></p>
+    </header>
+
+    <!-- Today -->
+    <main class="view view--today" id="view-today">
+      <aside class="side">
+        <section class="quote chunky deal" aria-label="Quote">
+          <div class="quote-body">
+            <p class="quote-text" id="quote-text">Loading a good line…</p>
+            <p class="quote-author" id="quote-author" hidden></p>
+          </div>
+          <button type="button" class="dice" id="dice" aria-label="Roll another quote" title="Roll another quote">🎲</button>
+        </section>
+
+        <section class="progress deal" aria-label="Today's progress">
+          <div class="progress-row">
+            <span id="progress-label">0 of 0 done</span>
+            <span id="next-timer"></span>
+          </div>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-bar"><i></i></div>
+        </section>
+
+        <nav class="folders deal" id="folders" aria-label="Categories"></nav>
+      </aside>
+
+      <section class="main" aria-label="Tasks">
+        <div class="list-head deal">
+          <div class="seg" role="tablist" aria-label="Day">
+            <button type="button" role="tab" class="seg-btn is-on" data-day="today" aria-selected="true">Today</button>
+            <button type="button" role="tab" class="seg-btn" data-day="tomorrow" aria-selected="false">Tomorrow</button>
+          </div>
+          <span class="sync" id="sync" title="Sync status">connecting</span>
+        </div>
+        <ul class="tasks" id="task-list"></ul>
+        <div class="empty chunky" id="empty" hidden>
+          <p class="empty-big" id="empty-title">A clean page.</p>
+          <p id="empty-text">Tap + to deal yourself a task.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- History -->
+    <main class="view view--history" id="view-history" hidden>
+      <h2 class="view-title">Last 3 days</h2>
+      <p class="view-sub">Tasks you set and how many you finished.</p>
+      <div class="days" id="history-list"></div>
+    </main>
+
+    <!-- Bottom dock -->
+    <nav class="dock" aria-label="Main">
+      <div class="tabs">
+        <button type="button" class="tab is-on" data-view="today" aria-current="page">Today</button>
+        <button type="button" class="tab" data-view="history">History</button>
+        <button type="button" class="avatar" id="avatar-btn" aria-label="Open profile">?</button>
+      </div>
+      <button type="button" class="fab" id="fab" aria-label="New task">+</button>
+    </nav>
+  </div>
+
+  <!-- ================= Sheets ================= -->
+  <div class="scrim" id="scrim" hidden></div>
+
+  <section class="sheet" id="task-sheet" role="dialog" aria-modal="true" aria-labelledby="task-sheet-title" hidden>
+    <div class="grab" aria-hidden="true"></div>
+    <h2 class="sheet-title" id="task-sheet-title">New task</h2>
+    <form id="task-form" autocomplete="off" novalidate>
+      <input id="t-title" class="input input--big" type="text" maxlength="200" placeholder="What needs doing?" aria-label="Task" required />
+
+      <div class="sheet-row">
+        <span class="label">For</span>
+        <div class="seg" id="t-day">
+          <button type="button" class="seg-btn is-on" data-value="today">Today</button>
+          <button type="button" class="seg-btn" data-value="tomorrow">Tomorrow</button>
+        </div>
+      </div>
+
+      <div class="sheet-block">
+        <span class="label">Category</span>
+        <div class="chips" id="t-cats"></div>
+        <input id="t-category" class="input" type="text" maxlength="40" placeholder="or type a new one" aria-label="Category" />
+      </div>
+
+      <div class="sheet-block">
+        <div class="sheet-row">
+          <span class="label">Timer</span>
+          <div class="seg" id="t-mode">
+            <button type="button" class="seg-btn is-on" data-value="none">None</button>
+            <button type="button" class="seg-btn" data-value="minutes">Minutes</button>
+            <button type="button" class="seg-btn" data-value="ends">Ends at</button>
+          </div>
+        </div>
+        <div class="timer-in" id="t-minutes-row" hidden>
+          <div class="chips" id="t-quick">
+            <button type="button" class="chip-btn" data-min="5">5</button>
+            <button type="button" class="chip-btn" data-min="15">15</button>
+            <button type="button" class="chip-btn" data-min="25">25</button>
+            <button type="button" class="chip-btn" data-min="45">45</button>
+          </div>
+          <input id="t-minutes" class="input input--short" type="number" inputmode="numeric" min="1" max="1440" step="1" placeholder="min" aria-label="Minutes" />
+        </div>
+        <div class="timer-in" id="t-end-row" hidden>
+          <input id="t-end" class="input input--short" type="time" aria-label="End time" />
+          <span class="hint" id="t-end-hint"></span>
+        </div>
+      </div>
+
+      <p class="form-error" id="t-error" role="alert"></p>
+      <button type="submit" class="btn btn--primary btn--block" id="t-submit">Add task</button>
+    </form>
+  </section>
+
+  <section class="sheet" id="profile-sheet" role="dialog" aria-modal="true" aria-labelledby="p-name" hidden>
+    <div class="grab" aria-hidden="true"></div>
+    <div class="profile-head">
+      <span class="avatar avatar--big" id="p-avatar" aria-hidden="true">?</span>
+      <div>
+        <h2 id="p-name">you</h2>
+        <p class="mono-sm" id="p-mood-name">mood</p>
+      </div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <span>Timer alerts</span>
+        <button type="button" class="toggle" id="p-timer" role="switch" aria-checked="true" aria-label="Timer alerts"></button>
+      </div>
+      <div class="row">
+        <span>9pm nudge</span>
+        <button type="button" class="toggle" id="p-nudge" role="switch" aria-checked="true" aria-label="9pm nudge"></button>
+      </div>
+      <div class="row">
+        <span>Unfinished tasks</span>
+        <div class="seg seg--sm" id="p-roll">
+          <button type="button" class="seg-btn" data-value="stay">Stay</button>
+          <button type="button" class="seg-btn is-on" data-value="roll">Roll over</button>
+        </div>
+      </div>
+      <div class="row">
+        <span>Mood</span>
+        <div class="seg seg--sm" id="p-mood">
+          <button type="button" class="seg-btn is-on" data-value="shuffle">Shuffle</button>
+          <button type="button" class="seg-btn" data-value="pin">Pin this</button>
+        </div>
+      </div>
+      <div class="row" id="p-device-row">
+        <span>This device</span>
+        <button type="button" class="btn btn--small" id="p-device-btn">Turn on alerts</button>
+      </div>
+      <button type="button" class="row row--link" id="p-signout"><span>Sign out</span><span aria-hidden="true">›</span></button>
+    </div>
+  </section>
+
+  <!-- First run: alerts -->
+  <section class="sheet" id="alerts-sheet" role="dialog" aria-modal="true" aria-labelledby="alerts-title" hidden>
+    <div class="grab" aria-hidden="true"></div>
+    <p class="big-emoji" aria-hidden="true">⏰</p>
+    <h2 class="sheet-title" id="alerts-title">Want a nudge?</h2>
+    <p class="sheet-text">Fray can buzz your phone when a timer runs out, and at 9pm to set up tomorrow, even when the app is closed.</p>
+    <p class="sheet-text ios-hint" id="alerts-ios" hidden>On iPhone: tap Share, then <b>Add to Home Screen</b>, open Fray from there, and turn alerts on in your profile.</p>
+    <button type="button" class="btn btn--primary btn--block" id="alerts-yes">Turn on alerts</button>
+    <button type="button" class="btn btn--ghost btn--block" id="alerts-no">Maybe later</button>
+  </section>
+
+  <!-- Time's up -->
+  <section class="timesup" id="timesup" role="alertdialog" aria-modal="true" aria-labelledby="timesup-title" hidden>
+    <div class="timesup-card chunky">
+      <p class="eyebrow">time's up</p>
+      <h2 id="timesup-title">Time's up!</h2>
+      <div class="timesup-actions">
+        <button type="button" class="btn btn--primary" id="timesup-done">Done ✓</button>
+        <button type="button" class="btn" id="timesup-snooze">+5 min</button>
+      </div>
+      <button type="button" class="link-btn" id="timesup-close">Close</button>
+    </div>
+  </section>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <template id="task-tpl">
+    <li class="task">
+      <div class="swipe-bg swipe-bg--done" aria-hidden="true">✓ Done</div>
+      <div class="swipe-bg swipe-bg--del" aria-hidden="true">Delete ✕</div>
+      <div class="task-card chunky">
+        <button type="button" class="tick" aria-label="Mark done"></button>
+        <div class="task-body">
+          <p class="task-title"><span class="tt"></span></p>
+          <div class="task-meta">
+            <span class="chip task-cat"></span>
+            <span class="task-when mono-sm"></span>
+          </div>
+          <div class="timer" hidden>
+            <span class="digit t-mm">00</span><span class="colon">:</span><span class="digit t-ss">00</span>
+            <span class="drain"><i></i></span>
+          </div>
+        </div>
+        <button type="button" class="task-del" aria-label="Delete task">✕</button>
+      </div>
+    </li>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
