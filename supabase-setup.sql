@@ -47,7 +47,7 @@ begin
       ('profiles', 'username'), ('profiles', 'nudged_on'),
       ('day_stats', 'done_count'),
       ('push_subscriptions', 'user_id'), ('push_subscriptions', 'p256dh'),
-      ('quotes', 'quote')
+      ('quotes', 'quote'), ('quotes', 'active')
     ) as v(tbl, col)
   loop
     if exists (select 1 from information_schema.tables
@@ -64,6 +64,7 @@ begin
         execute format('alter publication supabase_realtime drop table public.%I', t.tbl);
       end if;
       execute format('alter table public.%I rename to %I', t.tbl, backup);
+      execute format('revoke all on public.%I from anon, authenticated', backup);  -- backups stay private
       raise notice 'Renamed old public.% to public.%', t.tbl, backup;
     end if;
   end loop;

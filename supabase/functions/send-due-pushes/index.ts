@@ -16,11 +16,15 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const STALE_MS = 30 * 60 * 1000; // don't buzz for timers that ended over 30 min ago
 
-webpush.setVapidDetails(
-  Deno.env.get("VAPID_SUBJECT")!,
-  Deno.env.get("VAPID_PUBLIC_KEY")!,
-  Deno.env.get("VAPID_PRIVATE_KEY")!,
-);
+// A bad secret shows up as a readable error (in net._http_response)
+// instead of crashing the function on start.
+const env = (k: string) => (Deno.env.get(k) ?? "").trim().replace(/^["']|["']$/g, "");
+let vapidError = "";
+try {
+  webpush.setVapidDetails(env("VAPID_SUBJECT"), env("VAPID_PUBLIC_KEY"), env("VAPID_PRIVATE_KEY"));
+} catch (err) {
+  vapidError = `VAPID secrets look wrong: ${(err as Error).message}`;
+}
 
 const db = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -32,9 +36,19 @@ type Sub = { endpoint: string; user_id: string; p256dh: string; auth: string };
 type Message = { userId: string; title: string; body: string; tag: string; url: string };
 
 Deno.serve(async (req) => {
-  if (req.headers.get("x-cron-secret") !== Deno.env.get("CRON_SECRET")) {
+  if (req.headers.get("x-cron-secret") !== env("CRON_SECRET")) {
     return new Response("forbidden", { status: 403 });
   }
+  if (vapidError) return json({ error: vapidError }, 500);
+  try {
+    return await run();
+  } catch (err) {
+    console.error(err);
+    return json({ error: (err as Error).message }, 500);
+  }
+});
+
+async function run() {
 
   const now = new Date();
   const messages: Message[] = [];
@@ -111,7 +125,7 @@ Deno.serve(async (req) => {
   if (dead.length) await db.from("push_subscriptions").delete().in("endpoint", dead);
 
   return json({ timers: fresh.length, nudges: nudges?.length ?? 0, sent, removed: dead.length });
-});
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
