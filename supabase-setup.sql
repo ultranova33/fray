@@ -34,6 +34,41 @@ begin
   end if;
 end $$;
 
+-- Any other older table with the same name but a different shape (for example
+-- one made by an earlier draft) is also kept as a backup: <name>_old_backup.
+do $$
+declare
+  t record;
+  backup text;
+begin
+  for t in
+    select * from (values
+      ('tasks', 'for_date'), ('tasks', 'user_id'), ('tasks', 'push_sent_at'),
+      ('profiles', 'username'), ('profiles', 'nudged_on'),
+      ('day_stats', 'done_count'),
+      ('push_subscriptions', 'user_id'), ('push_subscriptions', 'p256dh'),
+      ('quotes', 'quote')
+    ) as v(tbl, col)
+  loop
+    if exists (select 1 from information_schema.tables
+               where table_schema = 'public' and table_name = t.tbl)
+       and not exists (select 1 from information_schema.columns
+                       where table_schema = 'public' and table_name = t.tbl and column_name = t.col) then
+      backup := t.tbl || '_old_backup';
+      while exists (select 1 from information_schema.tables
+                    where table_schema = 'public' and table_name = backup) loop
+        backup := backup || '_';
+      end loop;
+      if exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t.tbl) then
+        execute format('alter publication supabase_realtime drop table public.%I', t.tbl);
+      end if;
+      execute format('alter table public.%I rename to %I', t.tbl, backup);
+      raise notice 'Renamed old public.% to public.%', t.tbl, backup;
+    end if;
+  end loop;
+end $$;
+
 drop function if exists public.save_push_subscription(text, text, text, text, text);
 drop function if exists public.delete_push_subscription(text);
 
